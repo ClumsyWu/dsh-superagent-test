@@ -1,0 +1,6 @@
+# pi-sdk: DeepSeek Harness Python SDK
+# Provides the DeepSeekHarness class for running agent turns
+deepseek-harness-sdk>=0.1
+
+# Runtime binary dependency (installed automatically with the SDK)
+# deepseek-harness-runtime-bin
