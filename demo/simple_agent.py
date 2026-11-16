@@ -7,14 +7,23 @@ This demo shows how to:
 2. Run a simple agent task with a user prompt
 3. Handle the agent's response
 4. Work with named sessions for continued conversation
+5. Optionally configure one or more MCP servers whose tools become
+   available to the agent during the conversation
 
 Prerequisites:
   - A running dsh binary (installed as part of deepseek-harness-runtime-bin)
   - Valid DEEPSEEK_API_KEY or equivalent credentials
   - An explicit DSH_HOME directory
 
-Usage:
-  python -m demo.simple_agent --dsh-home /path/to/dsh-home "your task here"
+Usage (plain)::
+
+    python -m demo.simple_agent --dsh-home /path/to/dsh-home "your task here"
+
+Usage (with MCP servers)::
+
+    python -m demo.simple_agent --dsh-home /path/to/dsh-home \\
+        --mcp-stdio '{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/tmp"]}' \\
+        "List files in /tmp using the filesystem MCP tool"
 """
 
 from __future__ import annotations
@@ -26,6 +35,8 @@ from pathlib import Path
 
 # Import the pi-sdk (deepseek-harness-sdk)
 from deepseek_harness import DeepSeekHarness, RunResult
+
+from demo.mcp import add_mcp_arguments, mcp_servers_from_args, write_patch_file
 
 
 def main() -> None:
@@ -69,6 +80,8 @@ def main() -> None:
         default=None,
         help="Path to dsh binary (auto-detected if not provided)",
     )
+    # MCP server configuration
+    add_mcp_arguments(parser)
     args = parser.parse_args()
 
     # Validate inputs
@@ -77,6 +90,19 @@ def main() -> None:
 
     workspace = args.workspace.resolve()
     dsh_home = args.dsh_home.resolve()
+
+    # Resolve MCP servers
+    servers = mcp_servers_from_args(args)
+    patches: list[str] = []
+    if args.mcp_patch is not None:
+        patches.append(str(args.mcp_patch.resolve()))
+    if servers:
+        patch_path = write_patch_file(servers, prefix="mcp-simple-agent-")
+        print(f"🔌 MCP servers configured: {[s.name for s in servers]}")
+        print(f"   Patch file: {patch_path}")
+        patches.append(str(patch_path))
+        # Track the temp file for cleanup
+        setattr(args, "_mcp_patch_path", patch_path)
 
     print(f"🚀 Initializing agent demo...")
     print(f"   DSH_HOME:  {dsh_home}")
@@ -94,13 +120,13 @@ def main() -> None:
         "provider": args.provider,
         "model": args.model,
         "profile": "sdk",
+        "patches": tuple(patches),
     }
     if args.dsh_bin is not None:
         harness_kwargs["dsh_bin"] = str(args.dsh_bin.resolve())
 
     with DeepSeekHarness(**harness_kwargs) as harness:  # type: ignore[arg-type]
         # Run the agent task
-        # The session.run() method sends the prompt and waits for completion
         print("🤖 Running agent...")
         result: RunResult = harness.run(
             args.prompt,
@@ -123,6 +149,14 @@ def main() -> None:
 
         print()
         print(f"✨ Done (session_id: {result.session_id})")
+
+    # Cleanup temporary MCP patch file
+    mcp_patch = getattr(args, "_mcp_patch_path", None)
+    if mcp_patch is not None:
+        try:
+            mcp_patch.unlink()
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
