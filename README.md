@@ -17,7 +17,9 @@
 ├── demo/
 │   ├── __init__.py                  # 包初始化
 │   ├── simple_agent.py              # 简单 agent 单次调用 demo
-│   └── conversational_agent.py      # 多轮对话 agent demo（含用户问题处理）
+│   ├── conversational_agent.py      # 多轮对话 agent demo（含用户问题处理）
+│   ├── health_server.py             # 探活 HTTP 服务（/health、/metrics、/ready）
+│   └── test_health_server.py        # 探活接口单元测试
 ├── requirements.txt                 # Python 依赖
 └── README.md
 ```
@@ -73,6 +75,32 @@ python -m demo.conversational_agent \
 - **会话持久化**：使用 `session-id` 保存和恢复对话上下文
 - **用户问题处理**：通过 `UserQuestionHandler` 处理 agent 在运行中提出的问题（如审批请求）
 - **多轮上下文保持**：后续问题可引用前一轮的回答
+
+### 探活服务
+
+使用内置 `http.server` 模块提供标准探活端点，无需额外依赖：
+
+```bash
+# 启动服务（默认端口 8080）
+python -m demo.health_server
+
+# 指定端口
+python -m demo.health_server --port 9090
+```
+
+#### 端点说明
+
+| 端点 | 用途 | 预期状态 |
+|------|------|----------|
+| `GET /health` | 总体健康检查，服务存活时返回 200 | `{"status": "ok"}` |
+| `GET /metrics` | 基本运行指标（运行时间、请求计数） | `{"uptime_seconds": ..., "total_requests": ..., "status": "ok"}` |
+| `GET /ready` | 就绪检查，接受流量时返回 200 | `{"status": "ready"}` |
+
+#### 运行测试
+
+```bash
+python -m unittest demo.test_health_server -v
+```
 
 ### 自定义配置
 
