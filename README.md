@@ -1,28 +1,32 @@
 # dsh-superagent-test
 
-用于验证 [dsh-superagent](https://github.com/ClumsyWu/dsh-superagent) 的独立测试仓库。
+> 用于验证 [dsh-superagent](https://github.com/ClumsyWu/dsh-superagent) 的独立测试仓库。
+
+## 目录
+
+- [项目介绍](#项目介绍)
+- [pi-sdk Agent Demo](#pi-sdk-agent-demo)
+  - [前置条件](#前置条件)
+  - [安装](#安装)
+  - [使用说明](#使用说明)
+  - [探活服务](#探活服务)
+  - [自定义配置](#自定义配置)
+  - [SDK 功能概览](#sdk-功能概览)
+
+---
 
 ## 项目介绍
 
-本项目主要包含两方面内容：
+本项目包含两大模块：
 
-1. **dsh-superagent 集成测试** — 验证 agent 框架在不同场景下的行为
-2. **pi-sdk Agent Demo** — 使用 `deepseek-harness-sdk` 搭建的 agent 示例，展示 SDK 的核心功能
+| 模块 | 说明 |
+|------|------|
+| **dsh-superagent 集成测试** | 验证 agent 框架在不同场景下的行为 |
+| **pi-sdk Agent Demo** | 使用 `deepseek-harness-sdk` 搭建的 agent 示例，展示 SDK 的核心功能 |
+
+---
 
 ## pi-sdk Agent Demo
-
-### 项目结构
-
-```
-├── demo/
-│   ├── __init__.py                  # 包初始化
-│   ├── simple_agent.py              # 简单 agent 单次调用 demo
-│   ├── conversational_agent.py      # 多轮对话 agent demo（含用户问题处理）
-│   ├── health_server.py             # 探活 HTTP 服务（/health、/metrics、/ready）
-│   └── test_health_server.py        # 探活接口单元测试
-├── requirements.txt                 # Python 依赖
-└── README.md
-```
 
 ### 前置条件
 
@@ -39,6 +43,19 @@ pip install deepseek-harness-sdk
 
 # 设置 API 凭证
 export DEEPSEEK_API_KEY="sk-your-key-here"
+```
+
+### 项目结构
+
+```
+├── demo/
+│   ├── __init__.py                  # 包初始化
+│   ├── simple_agent.py              # 简单 agent 单次调用 demo
+│   ├── conversational_agent.py      # 多轮对话 agent demo（含用户问题处理）
+│   ├── health_server.py             # 探活 HTTP 服务（/health、/metrics、/ready）
+│   └── test_health_server.py        # 探活接口单元测试
+├── requirements.txt                 # Python 依赖
+└── README.md
 ```
 
 ### 使用说明
@@ -72,6 +89,7 @@ python -m demo.conversational_agent \
 ```
 
 该 demo 还演示了：
+
 - **会话持久化**：使用 `session-id` 保存和恢复对话上下文
 - **用户问题处理**：通过 `UserQuestionHandler` 处理 agent 在运行中提出的问题（如审批请求）
 - **多轮上下文保持**：后续问题可引用前一轮的回答
@@ -117,8 +135,10 @@ python -m unittest demo.test_health_server -v
 
 `deepseek-harness-sdk` 提供的主要能力：
 
-- **DeepSeekHarness**: 同步 SDK 客户端，管理 dsh 子进程生命周期
-- **Session**: 会话管理，支持上下文保持和恢复
-- **RunResult**: 包含最终响应、结束原因、事件和通知
-- **UserQuestionHandler**: 处理 agent 运行时提出的用户问题（如审批请求）
-- **NotificationSubscription**: 订阅会话事件和通知
+| 组件 | 说明 |
+|------|------|
+| **DeepSeekHarness** | 同步 SDK 客户端，管理 dsh 子进程生命周期 |
+| **Session** | 会话管理，支持上下文保持和恢复 |
+| **RunResult** | 包含最终响应、结束原因、事件和通知 |
+| **UserQuestionHandler** | 处理 agent 运行时提出的用户问题（如审批请求） |
+| **NotificationSubscription** | 订阅会话事件和通知 |
