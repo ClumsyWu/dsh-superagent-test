@@ -16,6 +16,7 @@
 ```
 ├── demo/
 │   ├── __init__.py                  # 包初始化
+│   ├── mcp.py                       # MCP 服务器配置与补丁生成工具
 │   ├── simple_agent.py              # 简单 agent 单次调用 demo
 │   ├── conversational_agent.py      # 多轮对话 agent demo（含用户问题处理）
 │   ├── health_server.py             # 探活 HTTP 服务（/health、/metrics、/ready）
@@ -56,6 +57,38 @@ python -m demo.simple_agent \
 
 支持自定义 prompt，默认为一个问候任务。
 
+#### 使用 MCP 工具的 agent 调用
+
+[MCP (Model Context Protocol)](https://modelcontextprotocol.io) 是一种开放标准，
+允许 agent 通过标准化接口调用外部工具。本例中，通过 `--mcp-stdio` 参数配置
+stdio MCP 服务器：
+
+```bash
+# 使用 MCP 文件系统工具列出目录内容
+python -m demo.simple_agent \
+  --dsh-home /path/to/dsh-home \
+  --mcp-stdio '{"name":"filesystem","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/tmp"]}' \
+  "Show me what's currently in /tmp"
+```
+
+也可使用 Streamable HTTP 传输：
+
+```bash
+python -m demo.simple_agent \
+  --dsh-home /path/to/dsh-home \
+  --mcp-http '{"name":"my-api","url":"http://localhost:8080/mcp"}' \
+  "Use the my-api MCP tools to... "
+```
+
+可通过预写的补丁文件也可配置 MCP 服务器：
+
+```bash
+python -m demo.simple_agent \
+  --dsh-home /path/to/dsh-home \
+  --mcp-patch /path/to/mcp-servers.patch.yml \
+  "Run a task with pre-configured MCP tools"
+```
+
 #### 多轮对话 demo
 
 展示上下文保持能力的多轮对话示例。内置三次对话回合：
@@ -75,6 +108,7 @@ python -m demo.conversational_agent \
 - **会话持久化**：使用 `session-id` 保存和恢复对话上下文
 - **用户问题处理**：通过 `UserQuestionHandler` 处理 agent 在运行中提出的问题（如审批请求）
 - **多轮上下文保持**：后续问题可引用前一轮的回答
+- **MCP 工具集成**：可通过 `--mcp-stdio` / `--mcp-http` 配置外部工具服务器
 
 ### 探活服务
 
@@ -112,6 +146,35 @@ python -m unittest demo.test_health_server -v
 | `--provider` | LLM 提供商（默认：`deepseek-official`） |
 | `--dsh-bin` | dsh 二进制文件路径（自动检测） |
 | `--session-id` | 会话 ID（用于恢复上下文） |
+| `--mcp-stdio` | 配置 stdio MCP 服务器（JSON 格式，可多次指定） |
+| `--mcp-http` | 配置 Streamable HTTP MCP 服务器（JSON 格式，可多次指定） |
+| `--mcp-patch` | 预写 MCP 补丁 YAML 文件路径 |
+
+### MCP 服务器配置
+
+MCP 服务器通过 `demo/mcp.py` 模块管理。支持的服务器类型：
+
+| 传输方式 | 配置参数（JSON） |
+|----------|-----------------|
+| stdio | `name`（必需）、`command`（必需）、`args`、`env`、`cwd`、`toolCallTimeoutMs`、`startupTimeoutMs`、`failOnStartupError` |
+| streamable-http | `name`（必需）、`url`（必需）、`headers`、`toolCallTimeoutMs`、`startupTimeoutMs`、`failOnStartupError` |
+
+配置参数也可通过程序化 API 使用：
+
+```python
+from demo.mcp import StdioServer, generate_yaml
+
+# 创建服务器配置
+server = StdioServer(
+    name="filesystem",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+)
+
+# 生成补丁 YAML
+yaml_output = generate_yaml([server])
+print(yaml_output)
+```
 
 ### SDK 功能概览
 

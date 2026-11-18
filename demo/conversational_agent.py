@@ -6,9 +6,16 @@ This demo shows how to:
 1. Use named sessions to maintain conversation context
 2. Send follow-up prompts that build on previous responses
 3. Handle user questions during agent execution
+4. Optionally configure MCP servers whose tools become available
+   to the agent throughout the conversation
 
-Usage:
-  python -m demo.conversational_agent --dsh-home /path/to/dsh-home
+Usage::
+
+    python -m demo.conversational_agent --dsh-home /path/to/dsh-home
+
+    # With MCP tools:
+    python -m demo.conversational_agent --dsh-home /path/to/dsh-home \\
+        --mcp-stdio '{"name":"fetch","command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
 """
 
 from __future__ import annotations
@@ -20,6 +27,8 @@ import threading
 from pathlib import Path
 
 from deepseek_harness import DeepSeekHarness, Notification, UserQuestionRequest, RunResult
+
+from demo.mcp import add_mcp_arguments, mcp_servers_from_args, write_patch_file
 
 
 def handle_user_question(
@@ -76,6 +85,13 @@ def main() -> None:
         default="conversational-demo",
         help="Session ID for maintaining conversation context",
     )
+    parser.add_argument(
+        "--provider",
+        default=os.environ.get("DSH_PROVIDER", "deepseek-official"),
+        help="LLM provider (default: DSH_PROVIDER env or deepseek-official)",
+    )
+    # MCP server configuration
+    add_mcp_arguments(parser)
     args = parser.parse_args()
 
     if not args.dsh_home.exists():
@@ -84,13 +100,26 @@ def main() -> None:
     workspace = args.workspace.resolve()
     dsh_home = args.dsh_home.resolve()
 
+    # Resolve MCP servers
+    servers = mcp_servers_from_args(args)
+    patches: list[str] = []
+    if args.mcp_patch is not None:
+        patches.append(str(args.mcp_patch.resolve()))
+    if servers:
+        patch_path = write_patch_file(servers, prefix="mcp-conversational-")
+        print(f"🔌 MCP servers configured: {[s.name for s in servers]}")
+        print(f"   Patch file: {patch_path}")
+        patches.append(str(patch_path))
+        setattr(args, "_mcp_patch_path", patch_path)
+
     # Configure the DeepSeek Harness SDK
     config = {
         "dsh_home": str(dsh_home),
         "cwd": str(workspace),
-        "provider": os.environ.get("DSH_PROVIDER", "deepseek-official"),
+        "provider": args.provider,
         "model": args.model,
         "profile": "sdk",
+        "patches": tuple(patches),
         "on_user_question": handle_user_question,
     }
 
@@ -121,6 +150,14 @@ def main() -> None:
     print()
     print("✨ Conversational demo completed successfully!")
     print(f"   Session saved. Resume with --session-id {args.session_id}")
+
+    # Cleanup temporary MCP patch file
+    mcp_patch = getattr(args, "_mcp_patch_path", None)
+    if mcp_patch is not None:
+        try:
+            mcp_patch.unlink()
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":
