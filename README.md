@@ -25,7 +25,9 @@
 │   ├── simple_agent.py              # 单次 agent 调用示例
 │   ├── conversational_agent.py      # 多轮对话 agent 示例
 │   ├── health_server.py             # 探活 HTTP 服务
-│   └── test_health_server.py        # 探活服务单元测试
+│   ├── test_health_server.py        # 探活服务单元测试
+│   ├── http_tool.py                 # HTTP 请求工具（CLI + 可集成到 agent）
+│   └── test_http_tool.py            # HTTP 请求工具单元测试
 ├── requirements.txt                 # Python 依赖
 └── README.md
 ```
@@ -104,6 +106,51 @@ python -m demo.health_server --port 9090
 
 ```bash
 python -m unittest demo.test_health_server -v
+```
+
+#### HTTP 请求工具
+
+零依赖的 HTTP(S) 请求工具（基于标准库 `urllib`），既可作为命令行工具直接调用，也可通过 `HttpTool` 类集成到 agent 循环中。支持 `GET`/`POST`/`PUT`/`PATCH`/`DELETE`/`HEAD`/`OPTIONS`、自定义请求头、原始或 JSON 请求体、超时与响应体截断。
+
+```bash
+# GET 请求
+python -m demo.http_tool https://httpbin.org/get
+
+# POST JSON，并附加请求头
+python -m demo.http_tool https://httpbin.org/post \
+  -X POST --json '{"name": "dsh"}' -H 'X-Test: demo'
+
+# 设置超时、限制响应体大小并美化输出
+python -m demo.http_tool https://example.com -t 5 --max-body-bytes 65536 --pretty
+```
+
+输出统一为 JSON：请求成功时返回 `status`、`reason`、`url`、`headers`、`body`、`truncated`、`elapsed_ms`；传输失败或参数错误时返回 `ok: false` 与 `error`。
+
+| 参数 | 说明 |
+|------|------|
+| `url` | 请求地址（仅支持 `http://` / `https://`） |
+| `-X, --method` | HTTP 方法（默认 `GET`） |
+| `-H, --header` | 请求头，格式 `'Name: Value'`，可重复 |
+| `-d, --data` | 原始请求体 |
+| `--json` | JSON 请求体，与 `--data` 互斥 |
+| `-t, --timeout` | 超时秒数（默认 30） |
+| `--max-body-bytes` | 返回响应体的最大字节数（默认 1 MiB） |
+| `--pretty` | 美化 JSON 输出 |
+
+编程方式调用：
+
+```python
+from demo.http_tool import HttpTool
+
+tool = HttpTool()
+result = tool.invoke({"url": "https://example.com", "method": "GET", "timeout_seconds": 5})
+print(result["status"], result["body"][:200])
+```
+
+运行测试：
+
+```bash
+python -m unittest demo.test_http_tool -v
 ```
 
 ### 配置参数
