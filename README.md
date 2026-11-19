@@ -110,7 +110,17 @@ python -m unittest demo.test_health_server -v
 
 #### HTTP 请求工具
 
-零依赖的 HTTP(S) 请求工具（基于标准库 `urllib`），既可作为命令行工具直接调用，也可通过 `HttpTool` 类集成到 agent 循环中。支持 `GET`/`POST`/`PUT`/`PATCH`/`DELETE`/`HEAD`/`OPTIONS`、自定义请求头、原始或 JSON 请求体、超时与响应体截断。
+零依赖的 HTTP(S) 请求工具（基于标准库 `urllib`、`ssl` 和 `zlib`），既可作为命令行工具直接调用，也可通过 `HttpTool` 类集成到 agent 循环中。
+
+主要能力：
+
+- 支持 `GET`/`POST`/`PUT`/`PATCH`/`DELETE`/`HEAD`/`OPTIONS`
+- 查询参数（同名参数可展开为多个值）、自定义请求头、原始或 JSON 请求体
+- 自动解压 `gzip` / `deflate` 响应；文本按声明的 charset 解码，二进制以 base64 返回
+- 重定向开关与最大跳数，跨域重定向自动剔除 `Authorization` / `Cookie`
+- 幂等请求的可配置重试（遵循 `Retry-After`）
+- 默认校验 TLS 证书，可显式关闭；支持超时与响应体截断
+- 保留完整响应头列表与 `Set-Cookie`，重复响应头不会被丢弃
 
 ```bash
 # GET 请求
@@ -120,21 +130,31 @@ python -m demo.http_tool https://httpbin.org/get
 python -m demo.http_tool https://httpbin.org/post \
   -X POST --json '{"name": "dsh"}' -H 'X-Test: demo'
 
-# 设置超时、限制响应体大小并美化输出
-python -m demo.http_tool https://example.com -t 5 --max-body-bytes 65536 --pretty
+# 查询参数、超时、响应体上限与美化输出
+python -m demo.http_tool https://httpbin.org/get \
+  --param q=dsh --param page=2 -t 5 --max-body-bytes 65536 --pretty
+
+# 不跟随重定向，或对自签名服务关闭证书校验
+python -m demo.http_tool https://example.com --no-redirect
+python -m demo.http_tool https://localhost:8443 -k
 ```
 
-输出统一为 JSON：请求成功时返回 `status`、`reason`、`url`、`headers`、`body`、`truncated`、`elapsed_ms`；传输失败或参数错误时返回 `ok: false` 与 `error`。
+输出统一为 JSON。请求成功时包含 `ok`、`status`、`reason`、`method`、`url`（重定向后的最终地址）、`requested_url`、`headers`、`header_items`、`cookies`、`body`、`body_format`（`text` / `base64`）、`charset`、`truncated`、`size_bytes`、`redirects`、`attempts`、`elapsed_ms`；参数或传输失败时返回 `ok: false`、`error` 与 `error_type`（如 `invalid_arguments`、`timeout`、`connection`、`redirect`、`content_encoding`）。
 
 | 参数 | 说明 |
 |------|------|
 | `url` | 请求地址（仅支持 `http://` / `https://`） |
 | `-X, --method` | HTTP 方法（默认 `GET`） |
 | `-H, --header` | 请求头，格式 `'Name: Value'`，可重复 |
+| `--param` | 查询参数，格式 `NAME=VALUE`，可重复 |
 | `-d, --data` | 原始请求体 |
 | `--json` | JSON 请求体，与 `--data` 互斥 |
-| `-t, --timeout` | 超时秒数（默认 30） |
+| `-t, --timeout` | 单次尝试超时秒数（默认 30） |
 | `--max-body-bytes` | 返回响应体的最大字节数（默认 1 MiB） |
+| `--no-redirect` | 不跟随重定向 |
+| `--max-redirects` | 最大重定向次数（默认 10） |
+| `--retries` | 幂等请求的重试次数（默认 0） |
+| `-k, --insecure` | 不校验 TLS 证书（有安全风险） |
 | `--pretty` | 美化 JSON 输出 |
 
 编程方式调用：
@@ -143,7 +163,15 @@ python -m demo.http_tool https://example.com -t 5 --max-body-bytes 65536 --prett
 from demo.http_tool import HttpTool
 
 tool = HttpTool()
-result = tool.invoke({"url": "https://example.com", "method": "GET", "timeout_seconds": 5})
+result = tool.invoke(
+    {
+        "url": "https://example.com",
+        "method": "GET",
+        "params": {"q": "dsh"},
+        "timeout_seconds": 5,
+        "retries": 1,
+    }
+)
 print(result["status"], result["body"][:200])
 ```
 
