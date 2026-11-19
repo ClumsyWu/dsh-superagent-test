@@ -27,7 +27,9 @@
 │   ├── health_server.py             # 探活 HTTP 服务
 │   ├── test_health_server.py        # 探活服务单元测试
 │   ├── http_tool.py                 # HTTP 请求工具（CLI + 可集成到 agent）
-│   └── test_http_tool.py            # HTTP 请求工具单元测试
+│   ├── test_http_tool.py            # HTTP 请求工具单元测试
+│   ├── read_file_tool.py            # 文件读取工具（CLI + 可集成到 agent）
+│   └── test_read_file_tool.py       # 文件读取工具单元测试
 ├── requirements.txt                 # Python 依赖
 └── README.md
 ```
@@ -151,6 +153,50 @@ print(result["status"], result["body"][:200])
 
 ```bash
 python -m unittest demo.test_http_tool -v
+```
+
+#### 文件读取工具
+
+零依赖的文本文件读取工具（基于标准库），既可作为命令行工具直接调用，也可通过 `ReadFileTool` 类集成到 agent 循环中。支持 1-based 行号分页（`offset` / `limit`）、自定义编码、返回内容字节上限、`~` 路径展开，以及二进制文件检测。
+
+```bash
+# 读取整个文件
+python -m demo.read_file_tool README.md
+
+# 从第 10 行开始读取 20 行
+python -m demo.read_file_tool README.md --offset 10 --limit 20
+
+# 指定编码、限制返回内容大小并美化输出
+python -m demo.read_file_tool data.txt --encoding gb18030 --max-bytes 65536 --pretty
+```
+
+输出统一为 JSON：成功时返回 `path`、`size_bytes`、`encoding`、`offset`、`line_count`、`next_offset`、`has_more`、`truncated`、`truncated_by`、`partial_line` 和 `content`；文件不存在、路径是目录、无权限、疑似二进制文件或参数错误时返回 `ok: false` 与 `error_type`、`error`。
+
+| 参数 | 说明 |
+|------|------|
+| `path` | 文件路径（绝对路径或相对当前目录，支持 `~`） |
+| `--offset` | 起始行号，1-based（默认 `1`） |
+| `--limit` | 最多返回的行数（默认 `2000`，最大 `100000`） |
+| `--max-bytes` | 返回内容的最大字节数（默认 1 MiB） |
+| `--encoding` | 文件编码（默认 `utf-8`） |
+| `--pretty` | 美化 JSON 输出 |
+
+`content` 保留原始换行符；`next_offset` 可传给下一次调用的 `offset` 以继续读取。当单行长度超过 `max_bytes` 时，该行会被截断并返回 `partial_line: true`，此时 `next_offset` 为 `null`，需要增大 `max_bytes` 后重试。
+
+编程方式调用：
+
+```python
+from demo.read_file_tool import ReadFileTool
+
+tool = ReadFileTool()
+result = tool.invoke({"path": "README.md", "offset": 10, "limit": 20})
+print(result["content"])
+```
+
+运行测试：
+
+```bash
+python -m unittest demo.test_read_file_tool -v
 ```
 
 ### 配置参数
