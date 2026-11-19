@@ -27,7 +27,9 @@
 │   ├── health_server.py             # 探活 HTTP 服务
 │   ├── test_health_server.py        # 探活服务单元测试
 │   ├── http_tool.py                 # HTTP 请求工具（CLI + 可集成到 agent）
-│   └── test_http_tool.py            # HTTP 请求工具单元测试
+│   ├── test_http_tool.py            # HTTP 请求工具单元测试
+│   ├── edit_tool.py                 # 文本文件编辑工具（CLI + 可集成到 agent）
+│   └── test_edit_tool.py            # 文本文件编辑工具单元测试
 ├── requirements.txt                 # Python 依赖
 └── README.md
 ```
@@ -151,6 +153,51 @@ print(result["status"], result["body"][:200])
 
 ```bash
 python -m unittest demo.test_http_tool -v
+```
+
+#### 文本文件编辑工具
+
+零依赖的精确文本替换工具（基于标准库 `pathlib`），既可作为命令行工具直接调用，也可通过 `EditTool` 类集成到 agent 循环中。默认要求 `old_string` 在文件中只出现一次，避免误改；文件按指定编码读取、拒绝二进制内容，写入时先生成临时文件再原子替换，并保留原文件权限。
+
+```bash
+# 替换唯一匹配的文本
+python -m demo.edit_tool notes.txt --old "hello" --new "hi"
+
+# 替换所有匹配
+python -m demo.edit_tool notes.txt --old "TODO" --new "DONE" --replace-all
+
+# 预览修改（不写文件）
+python -m demo.edit_tool notes.txt --old "old" --new "new" --dry-run
+```
+
+输出统一为 JSON：成功时返回 `file_path`、`replacements`、`line`、`encoding`、`dry_run`、`changed`、`bytes_before`、`bytes_after`；参数错误返回 `ok: false` 与 `invalid_arguments: ...`，文件或匹配错误返回 `ok: false` 与 `edit_failed: ...`。
+
+| 参数 | 说明 |
+|------|------|
+| `file_path` | 待编辑的已存在文本文件 |
+| `--old` | 要替换的精确文本（不能为空，注意包含空白与换行符） |
+| `--new` | 替换后的文本，传 `''` 表示删除匹配内容 |
+| `--replace-all` | 替换所有匹配（默认要求唯一匹配） |
+| `--encoding` | 读写编码（默认 `utf-8`） |
+| `--dry-run` | 只报告修改，不写文件 |
+| `--pretty` | 美化 JSON 输出 |
+
+编程方式调用：
+
+```python
+from demo.edit_tool import EditTool
+
+tool = EditTool()
+result = tool.invoke(
+    {"file_path": "notes.txt", "old_string": "hello", "new_string": "hi"}
+)
+print(result["replacements"], result["line"])
+```
+
+运行测试：
+
+```bash
+python -m unittest demo.test_edit_tool -v
 ```
 
 ### 配置参数
